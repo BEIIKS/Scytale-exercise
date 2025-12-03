@@ -11,12 +11,15 @@ REPO_OWNER = "Scytale-exercise"
 REPO_NAME = "Scytale_repo"
 
 GITHUB_API_URL = "https://api.github.com"
+GITHUB_TOKEN = "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"
 
 def get_headers() -> Dict[str, str]:
     headers = {
         "Accept": "application/vnd.github.v3+json",
         "User-Agent": "Scytale-Exercise-Script"
     }
+    if GITHUB_TOKEN:
+        headers["Authorization"] = f"token {GITHUB_TOKEN}"
 
     return headers
 
