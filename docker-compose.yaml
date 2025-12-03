@@ -1,0 +1,68 @@
+version: '3.7'
+
+x-airflow-common: &airflow-common
+  user: "${AIRFLOW_UID:-50000}:0"
+  image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.11.0}
+  restart: always
+  environment:
+    &airflow-env
+    AIRFLOW_UID: "${AIRFLOW_UID:-50000}"
+    AIRFLOW_HOME: /opt/airflow
+    PYTHONPATH: "/opt/airflow"
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__WEBSERVER__SECRET_KEY: super-secret
+    AIRFLOW__WEBSERVER__RBAC_AUTHENTICATE_MB: "True"
+    AIRFLOW__WEBSERVER__RBAC_AUTHENTICATE: "True"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./src:/opt/airflow/src
+    - ./data:/opt/airflow/data
+    - ./requirements.txt:/requirements.txt
+  depends_on:
+    - postgres
+
+services:
+  postgres:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  init:
+    <<: *airflow-common
+    restart: "no"
+    command: >
+     bash -c "
+      pip install --ignore-installed --force-reinstall --no-cache-dir -r /requirements.txt && 
+      airflow db migrate &&
+      airflow users delete -u airflow -f || true &&
+      airflow users create -u airflow -p airflow -r Admin -e admin@example.com -f Air -l Flow || true
+      "
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: airflow webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: airflow scheduler
+    depends_on:
+      init:
+        condition: service_completed_successfully
+
+volumes:
+  pg_data:
